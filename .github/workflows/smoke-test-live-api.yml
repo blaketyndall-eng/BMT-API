@@ -8,9 +8,6 @@ on:
         required: false
         default: acme.com
         type: string
-  push:
-    branches:
-      - main
 
 jobs:
   smoke-test:
