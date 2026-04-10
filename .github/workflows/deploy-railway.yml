@@ -1,0 +1,40 @@
+name: Deploy to Railway
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy API service
+        if: ${{ secrets.RAILWAY_TOKEN != '' && vars.RAILWAY_PROJECT_ID != '' && vars.RAILWAY_ENVIRONMENT_NAME != '' && vars.RAILWAY_API_SERVICE != '' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_NAME: ${{ vars.RAILWAY_ENVIRONMENT_NAME }}
+          RAILWAY_API_SERVICE: ${{ vars.RAILWAY_API_SERVICE }}
+        run: railway up --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_API_SERVICE"
+
+      - name: Deploy worker service
+        if: ${{ secrets.RAILWAY_TOKEN != '' && vars.RAILWAY_PROJECT_ID != '' && vars.RAILWAY_ENVIRONMENT_NAME != '' && vars.RAILWAY_WORKER_SERVICE != '' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_NAME: ${{ vars.RAILWAY_ENVIRONMENT_NAME }}
+          RAILWAY_WORKER_SERVICE: ${{ vars.RAILWAY_WORKER_SERVICE }}
+        run: railway up --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_WORKER_SERVICE"
