@@ -18,7 +18,7 @@ async def process_one_browser_fetch_job(*, worker_id: str) -> bool:
 
         source = db.get(Source, job.source_id)
         if source is None:
-            mark_job_failed(job, f"Source not found for job {job.crawl_job_id}")
+            mark_job_failed(job, f"Source not found for job {job.crawl_job_id}", retryable=False)
             db.commit()
             return True
 
@@ -53,7 +53,7 @@ async def process_one_browser_fetch_job(*, worker_id: str) -> bool:
             db.commit()
             return True
         except Exception as exc:
-            mark_job_failed(job, str(exc))
+            mark_job_failed(job, str(exc), retryable=True)
             db.commit()
             return True
     finally:

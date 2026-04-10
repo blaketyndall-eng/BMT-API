@@ -15,8 +15,11 @@ class CrawlJobSummary(BaseModel):
     status: str
     priority: int
     attempt_count: int
+    max_attempts: int
     lease_owner: str | None
     lease_expires_at: datetime | None
+    next_attempt_at: datetime | None
+    completed_at: datetime | None
     last_error: str | None
     created_at: datetime
     updated_at: datetime

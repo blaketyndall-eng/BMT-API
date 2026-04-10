@@ -158,7 +158,7 @@ class VendorResolutionService:
                 select(CrawlJob).where(
                     CrawlJob.source_id == source.source_id,
                     CrawlJob.job_type == "fetch_source",
-                    CrawlJob.status.in_(["queued", "leased"]),
+                    CrawlJob.status.in_(["queued", "leased", "retryable"]),
                 )
             ).scalar_one_or_none()
             if existing_job is not None:
@@ -173,6 +173,7 @@ class VendorResolutionService:
                 worker_queue=worker_queue,
                 status="queued",
                 priority=80,
+                max_attempts=3,
                 payload={
                     "vendor_id": str(vendor.vendor_id),
                     "product_id": str(product.product_id),
