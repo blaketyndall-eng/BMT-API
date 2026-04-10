@@ -1,5 +1,4 @@
 import re
-from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,7 +26,6 @@ def _normalize_database_url(url: str) -> str:
     return url
 
 
-@lru_cache(maxsize=1)
 def get_settings() -> Settings:
     settings = Settings()
     settings.database_url = _normalize_database_url(settings.database_url)
