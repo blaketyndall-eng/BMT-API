@@ -39,6 +39,8 @@ class PageSummary(BaseModel):
     title: str | None
     http_status: int | None
     content_type: str | None
+    classifier_version: str | None
+    classifier_confidence: float | None
     fetched_at: datetime
     created_at: datetime
     updated_at: datetime

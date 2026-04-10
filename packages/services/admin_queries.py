@@ -79,6 +79,8 @@ class AdminQueryService:
                 title=page.title,
                 http_status=page.http_status,
                 content_type=page.content_type,
+                classifier_version=page.parser_metadata.get("classifier_version"),
+                classifier_confidence=page.parser_metadata.get("classifier_confidence"),
                 fetched_at=page.fetched_at,
                 created_at=page.created_at,
                 updated_at=page.updated_at,

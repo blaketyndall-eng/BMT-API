@@ -5,6 +5,7 @@ from sqlalchemy import select
 from packages.connectors.browser_fetcher import fetch_page
 from packages.core.db import SessionLocal
 from packages.core.models import Page, Source
+from packages.extraction.page_classifier import CLASSIFIER_VERSION, classify_page
 from packages.workers.job_leasing import lease_next_job, mark_job_failed, mark_job_succeeded
 
 
@@ -24,6 +25,13 @@ async def process_one_browser_fetch_job(*, worker_id: str) -> bool:
 
         try:
             result = await fetch_page(source.root_url)
+            classification = classify_page(
+                requested_url=result.requested_url,
+                final_url=result.final_url,
+                title=result.title,
+                page_text=result.page_text,
+                source_type=source.source_type,
+            )
 
             page = db.execute(
                 select(Page).where(Page.canonical_url == result.final_url)
@@ -35,7 +43,7 @@ async def process_one_browser_fetch_job(*, worker_id: str) -> bool:
                 )
                 db.add(page)
 
-            page.page_type = source.source_type
+            page.page_type = classification.page_type
             page.title = result.title
             page.http_status = result.status_code
             page.content_type = result.content_type
@@ -47,6 +55,9 @@ async def process_one_browser_fetch_job(*, worker_id: str) -> bool:
                 "final_url": result.final_url,
                 "source_type": source.source_type,
                 "content_type": result.content_type,
+                "classifier_version": CLASSIFIER_VERSION,
+                "classifier_confidence": classification.confidence,
+                "classifier_reasons": classification.reasons,
             }
 
             mark_job_succeeded(job)
