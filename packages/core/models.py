@@ -59,7 +59,7 @@ class Source(TimestampMixin, Base):
     root_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     connector_type: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    source_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     vendor: Mapped[Vendor | None] = relationship(back_populates="sources")
     product: Mapped[Product | None] = relationship(back_populates="sources")
