@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bmt_api
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    image: python:3.11-slim
+    working_dir: /app
+    command: bash -lc "pip install -e .[dev] && uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      BMT_API_ENV: local
+      BMT_API_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/bmt_api
+    depends_on:
+      - db
+
+  worker:
+    image: python:3.11-slim
+    working_dir: /app
+    command: bash -lc "pip install -e .[dev] && python -m apps.worker.main"
+    volumes:
+      - .:/app
+    environment:
+      BMT_API_ENV: local
+      BMT_API_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/bmt_api
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
