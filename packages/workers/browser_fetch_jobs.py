@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from packages.connectors.browser_fetcher import fetch_page
 from packages.core.db import SessionLocal
-from packages.core.models import Page, Source
+from packages.core.models import Evidence, Page, Source
+from packages.extraction.evidence_extractors import EXTRACTOR_NAME, EXTRACTOR_VERSION, extract_page_evidence
 from packages.extraction.page_classifier import CLASSIFIER_VERSION, classify_page
 from packages.workers.job_leasing import lease_next_job, mark_job_failed, mark_job_succeeded
 
@@ -42,6 +43,7 @@ async def process_one_browser_fetch_job(*, worker_id: str) -> bool:
                     canonical_url=result.final_url,
                 )
                 db.add(page)
+                db.flush()
 
             page.page_type = classification.page_type
             page.title = result.title
@@ -59,6 +61,30 @@ async def process_one_browser_fetch_job(*, worker_id: str) -> bool:
                 "classifier_confidence": classification.confidence,
                 "classifier_reasons": classification.reasons,
             }
+            db.flush()
+
+            db.execute(delete(Evidence).where(Evidence.page_id == page.page_id))
+            extracted = extract_page_evidence(
+                page_type=page.page_type,
+                title=page.title,
+                page_text=page.page_text,
+            )
+            for item in extracted:
+                db.add(
+                    Evidence(
+                        vendor_id=source.vendor_id,
+                        product_id=source.product_id,
+                        source_id=source.source_id,
+                        page_id=page.page_id,
+                        evidence_type=item.evidence_type,
+                        label=item.label,
+                        snippet=item.snippet,
+                        confidence=item.confidence,
+                        extractor_name=EXTRACTOR_NAME,
+                        extractor_version=EXTRACTOR_VERSION,
+                        evidence_metadata=item.metadata,
+                    )
+                )
 
             mark_job_succeeded(job)
             db.commit()

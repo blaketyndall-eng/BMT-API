@@ -8,12 +8,14 @@ from sqlalchemy.orm import Session
 from packages.contracts.admin import (
     CrawlJobListResponse,
     CrawlJobSummary,
+    EvidenceListResponse,
+    EvidenceSummary,
     PageListResponse,
     PageSummary,
     SourceSummary,
     VendorSourcesResponse,
 )
-from packages.core.models import CrawlJob, Page, Source
+from packages.core.models import CrawlJob, Evidence, Page, Source
 
 
 class AdminQueryService:
@@ -88,6 +90,50 @@ class AdminQueryService:
             for page, source in rows
         ]
         return PageListResponse(items=items)
+
+    def list_evidence(
+        self,
+        *,
+        evidence_type: str | None,
+        product_id: str | None,
+        vendor_id: str | None,
+        limit: int,
+    ) -> EvidenceListResponse:
+        stmt: Select = (
+            select(Evidence, Page)
+            .outerjoin(Page, Evidence.page_id == Page.page_id)
+            .order_by(Evidence.created_at.desc())
+            .limit(limit)
+        )
+        if evidence_type:
+            stmt = stmt.where(Evidence.evidence_type == evidence_type)
+        if product_id:
+            stmt = stmt.where(Evidence.product_id == uuid.UUID(product_id))
+        if vendor_id:
+            stmt = stmt.where(Evidence.vendor_id == uuid.UUID(vendor_id))
+
+        rows = self.db.execute(stmt).all()
+        items = [
+            EvidenceSummary(
+                evidence_id=str(evidence.evidence_id),
+                vendor_id=str(evidence.vendor_id) if evidence.vendor_id else None,
+                product_id=str(evidence.product_id) if evidence.product_id else None,
+                source_id=str(evidence.source_id) if evidence.source_id else None,
+                page_id=str(evidence.page_id) if evidence.page_id else None,
+                canonical_url=page.canonical_url if page else None,
+                page_type=page.page_type if page else None,
+                evidence_type=evidence.evidence_type,
+                label=evidence.label,
+                snippet=evidence.snippet,
+                confidence=evidence.confidence,
+                extractor_name=evidence.extractor_name,
+                extractor_version=evidence.extractor_version,
+                created_at=evidence.created_at,
+                updated_at=evidence.updated_at,
+            )
+            for evidence, page in rows
+        ]
+        return EvidenceListResponse(items=items)
 
     def list_vendor_sources(self, vendor_id: uuid.UUID) -> VendorSourcesResponse:
         rows = self.db.execute(

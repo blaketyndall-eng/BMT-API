@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,6 +31,7 @@ class Vendor(TimestampMixin, Base):
 
     products: Mapped[list[Product]] = relationship(back_populates="vendor", cascade="all, delete-orphan")
     sources: Mapped[list[Source]] = relationship(back_populates="vendor", cascade="all, delete-orphan")
+    evidence_items: Mapped[list[Evidence]] = relationship(back_populates="vendor")
 
 
 class Product(TimestampMixin, Base):
@@ -46,6 +47,7 @@ class Product(TimestampMixin, Base):
 
     vendor: Mapped[Vendor] = relationship(back_populates="products")
     sources: Mapped[list[Source]] = relationship(back_populates="product")
+    evidence_items: Mapped[list[Evidence]] = relationship(back_populates="product")
 
 
 class Source(TimestampMixin, Base):
@@ -64,6 +66,7 @@ class Source(TimestampMixin, Base):
     vendor: Mapped[Vendor | None] = relationship(back_populates="sources")
     product: Mapped[Product | None] = relationship(back_populates="sources")
     pages: Mapped[list[Page]] = relationship(back_populates="source", cascade="all, delete-orphan")
+    evidence_items: Mapped[list[Evidence]] = relationship(back_populates="source")
 
 
 class Page(TimestampMixin, Base):
@@ -84,6 +87,29 @@ class Page(TimestampMixin, Base):
     parser_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     source: Mapped[Source] = relationship(back_populates="pages")
+    evidence_items: Mapped[list[Evidence]] = relationship(back_populates="page", cascade="all, delete-orphan")
+
+
+class Evidence(TimestampMixin, Base):
+    __tablename__ = "evidence"
+
+    evidence_id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vendors.vendor_id"))
+    product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.product_id"))
+    source_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sources.source_id"))
+    page_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pages.page_id"))
+    evidence_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    snippet: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    extractor_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    extractor_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    evidence_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+
+    vendor: Mapped[Vendor | None] = relationship(back_populates="evidence_items")
+    product: Mapped[Product | None] = relationship(back_populates="evidence_items")
+    source: Mapped[Source | None] = relationship(back_populates="evidence_items")
+    page: Mapped[Page | None] = relationship(back_populates="evidence_items")
 
 
 class CrawlJob(TimestampMixin, Base):

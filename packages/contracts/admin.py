@@ -50,6 +50,28 @@ class PageListResponse(BaseModel):
     items: list[PageSummary]
 
 
+class EvidenceSummary(BaseModel):
+    evidence_id: str
+    vendor_id: str | None
+    product_id: str | None
+    source_id: str | None
+    page_id: str | None
+    canonical_url: str | None
+    page_type: str | None
+    evidence_type: str
+    label: str
+    snippet: str
+    confidence: float
+    extractor_name: str
+    extractor_version: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class EvidenceListResponse(BaseModel):
+    items: list[EvidenceSummary]
+
+
 class SourceSummary(BaseModel):
     source_id: str
     vendor_id: str | None
