@@ -1,6 +1,10 @@
+import logging
+import os
 import re
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -27,6 +31,13 @@ def _normalize_database_url(url: str) -> str:
 
 
 def get_settings() -> Settings:
+    raw_env = os.environ.get("BMT_API_ENV", "<not set>")
+    logger.debug("BMT_API_ENV raw value from os.environ: %r", raw_env)
     settings = Settings()
+    logger.debug(
+        "Settings initialised — environment=%r database_url=%r",
+        settings.environment,
+        settings.database_url,
+    )
     settings.database_url = _normalize_database_url(settings.database_url)
     return settings
