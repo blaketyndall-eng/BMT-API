@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from apps.api.routes.admin import router as admin_router
+from apps.api.routes.products import router as products_router
 from apps.api.routes.vendors import router as vendors_router
 from packages.core.config import get_settings
 
@@ -12,6 +13,7 @@ app = FastAPI(
 
 app.include_router(vendors_router)
 app.include_router(admin_router)
+app.include_router(products_router)
 
 
 @app.get("/healthz", tags=["system"])
