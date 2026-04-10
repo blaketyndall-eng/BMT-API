@@ -8,7 +8,7 @@ Start the local stack:
 docker compose up -d db
 ```
 
-Apply the migration:
+Apply the migrations:
 
 ```bash
 python scripts/db_upgrade.py
@@ -39,16 +39,11 @@ curl -X POST http://localhost:8000/v1/vendors/resolve \
   }'
 ```
 
-## Expected outcome
+## Verify the worker path
 
-The resolve endpoint should:
-- create or reuse a vendor record
-- create or reuse a primary product
-- discover likely public source surfaces
-- queue crawl jobs for those sources
+After resolving a vendor, the worker should lease a queued `browser_fetch` job and persist a `pages` record for the fetched URL.
 
 ## Current scope
 
-This is the foundation only.
-The worker does not yet lease and execute crawl jobs.
-The immediate next implementation step is real job leasing plus the first browser fetch worker.
+This is the first execution path only.
+The worker leases and executes `browser_fetch` jobs, but deeper parsing and evidence extraction still need to be added.

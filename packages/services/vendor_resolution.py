@@ -154,6 +154,16 @@ class VendorResolutionService:
 
         job_ids: list[str] = []
         for source in sources:
+            existing_job = self.db.execute(
+                select(CrawlJob).where(
+                    CrawlJob.source_id == source.source_id,
+                    CrawlJob.job_type == "fetch_source",
+                    CrawlJob.status.in_(["queued", "leased"]),
+                )
+            ).scalar_one_or_none()
+            if existing_job is not None:
+                continue
+
             worker_queue = "browser_fetch" if source.connector_type == "browser" else "api_fetch"
             job = CrawlJob(
                 vendor_id=vendor.vendor_id,
