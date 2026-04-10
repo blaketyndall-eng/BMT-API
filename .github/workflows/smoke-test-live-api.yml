@@ -1,0 +1,37 @@
+name: Smoke Test Live API
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: Vendor domain to resolve against the live API
+        required: false
+        default: acme.com
+        type: string
+  push:
+    branches:
+      - main
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    env:
+      BMT_API_BASE_URL: ${{ vars.BMT_API_BASE_URL }}
+      TEST_DOMAIN: ${{ inputs.domain || 'acme.com' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify base URL is configured
+        run: |
+          test -n "$BMT_API_BASE_URL" || (echo "BMT_API_BASE_URL is not set" && exit 1)
+
+      - name: Healthcheck
+        run: |
+          curl -fsS "$BMT_API_BASE_URL/healthz"
+
+      - name: Resolve vendor
+        run: |
+          curl -fsS -X POST "$BMT_API_BASE_URL/v1/vendors/resolve" \
+            -H "Content-Type: application/json" \
+            -d "{\"input\":{\"type\":\"domain\",\"value\":\"$TEST_DOMAIN\"},\"options\":{\"discover_sources\":true,\"seed_crawl\":true}}"
