@@ -39,3 +39,21 @@ def test_rank_uses_source_type_prior_when_no_history_exists() -> None:
 
     assert ranked[0].root_url == pricing.root_url
     assert ranked[0].confidence >= ranked[1].confidence
+
+
+def test_rank_penalizes_existing_coverage_and_failed_crawls() -> None:
+    ranker = SourcePlannerRanker()
+    cleaner = _proposal("https://docs.example.com", "docs_subdomain", 0.82)
+    penalized = _proposal("https://developers.example.com", "developers_subdomain", 0.82)
+
+    ranked = ranker.rank(
+        [penalized, cleaner],
+        {
+            cleaner.root_url: ProposalHistory(promoted_count=1, same_type_existing_count=0, recent_failed_crawls=0),
+            penalized.root_url: ProposalHistory(promoted_count=1, same_type_existing_count=3, recent_failed_crawls=2),
+        },
+    )
+
+    assert ranked[0].root_url == cleaner.root_url
+    assert "existing coverage" in ranked[1].reason.lower()
+    assert "crawl attempts failed" in ranked[1].reason.lower()
