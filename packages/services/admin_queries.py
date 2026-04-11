@@ -6,16 +6,22 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from packages.contracts.admin import (
+    AgentEvalRunListResponse,
+    AgentEvalRunSummary,
+    AgentRunListResponse,
+    AgentRunSummary,
     CrawlJobListResponse,
     CrawlJobSummary,
     EvidenceListResponse,
     EvidenceSummary,
     PageListResponse,
     PageSummary,
+    SourceProposalDecisionListResponse,
+    SourceProposalDecisionSummary,
     SourceSummary,
     VendorSourcesResponse,
 )
-from packages.core.models import CrawlJob, Evidence, Page, Source
+from packages.core.models import AgentEvalRun, AgentRun, CrawlJob, Evidence, Page, Source, SourceProposalDecision
 
 
 class AdminQueryService:
@@ -158,3 +164,88 @@ class AdminQueryService:
             for source in rows
         ]
         return VendorSourcesResponse(vendor_id=str(vendor_id), items=items)
+
+    def list_agent_runs(self, *, agent_name: str | None, product_id: str | None, status: str | None, trace_id: str | None, limit: int) -> AgentRunListResponse:
+        stmt: Select = select(AgentRun).order_by(AgentRun.created_at.desc()).limit(limit)
+        if agent_name:
+            stmt = stmt.where(AgentRun.agent_name == agent_name)
+        if product_id:
+            stmt = stmt.where(AgentRun.product_id == uuid.UUID(product_id))
+        if status:
+            stmt = stmt.where(AgentRun.status == status)
+        if trace_id:
+            stmt = stmt.where(AgentRun.trace_id == trace_id)
+
+        rows = self.db.execute(stmt).scalars()
+        items = [
+            AgentRunSummary(
+                agent_run_id=str(run.agent_run_id),
+                agent_name=run.agent_name,
+                strategy_version=run.strategy_version,
+                mode=run.mode,
+                status=run.status,
+                trace_id=run.trace_id,
+                request_id=run.request_id,
+                product_id=str(run.product_id) if run.product_id else None,
+                vendor_id=str(run.vendor_id) if run.vendor_id else None,
+                created_at=run.created_at,
+                updated_at=run.updated_at,
+            )
+            for run in rows
+        ]
+        return AgentRunListResponse(items=items)
+
+    def list_agent_eval_runs(self, *, agent_name: str | None, status: str | None, trace_id: str | None, limit: int) -> AgentEvalRunListResponse:
+        stmt: Select = select(AgentEvalRun).order_by(AgentEvalRun.created_at.desc()).limit(limit)
+        if agent_name:
+            stmt = stmt.where(AgentEvalRun.agent_name == agent_name)
+        if status:
+            stmt = stmt.where(AgentEvalRun.status == status)
+        if trace_id:
+            stmt = stmt.where(AgentEvalRun.trace_id == trace_id)
+
+        rows = self.db.execute(stmt).scalars()
+        items = [
+            AgentEvalRunSummary(
+                agent_eval_run_id=str(run.agent_eval_run_id),
+                agent_name=run.agent_name,
+                evaluator_version=run.evaluator_version,
+                status=run.status,
+                trace_id=run.trace_id,
+                score=run.score,
+                overall_passed=run.overall_passed,
+                created_at=run.created_at,
+                updated_at=run.updated_at,
+            )
+            for run in rows
+        ]
+        return AgentEvalRunListResponse(items=items)
+
+    def list_source_proposal_decisions(self, *, decision_type: str | None, product_id: str | None, trace_id: str | None, limit: int) -> SourceProposalDecisionListResponse:
+        stmt: Select = select(SourceProposalDecision).order_by(SourceProposalDecision.created_at.desc()).limit(limit)
+        if decision_type:
+            stmt = stmt.where(SourceProposalDecision.decision_type == decision_type)
+        if product_id:
+            stmt = stmt.where(SourceProposalDecision.product_id == uuid.UUID(product_id))
+        if trace_id:
+            stmt = stmt.where(SourceProposalDecision.trace_id == trace_id)
+
+        rows = self.db.execute(stmt).scalars()
+        items = [
+            SourceProposalDecisionSummary(
+                source_proposal_decision_id=str(decision.source_proposal_decision_id),
+                decision_type=decision.decision_type,
+                agent_name=decision.agent_name,
+                trace_id=decision.trace_id,
+                product_id=str(decision.product_id) if decision.product_id else None,
+                vendor_id=str(decision.vendor_id) if decision.vendor_id else None,
+                source_id=str(decision.source_id) if decision.source_id else None,
+                crawl_job_id=str(decision.crawl_job_id) if decision.crawl_job_id else None,
+                proposal_root_url=decision.proposal_payload.get("root_url"),
+                note=decision.note,
+                created_at=decision.created_at,
+                updated_at=decision.updated_at,
+            )
+            for decision in rows
+        ]
+        return SourceProposalDecisionListResponse(items=items)

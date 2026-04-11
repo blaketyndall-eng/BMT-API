@@ -88,3 +88,56 @@ class SourceSummary(BaseModel):
 class VendorSourcesResponse(BaseModel):
     vendor_id: str
     items: list[SourceSummary]
+
+
+class AgentRunSummary(BaseModel):
+    agent_run_id: str
+    agent_name: str
+    strategy_version: str | None
+    mode: str | None
+    status: str
+    trace_id: str | None
+    request_id: str | None
+    product_id: str | None
+    vendor_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentRunListResponse(BaseModel):
+    items: list[AgentRunSummary]
+
+
+class AgentEvalRunSummary(BaseModel):
+    agent_eval_run_id: str
+    agent_name: str
+    evaluator_version: str
+    status: str
+    trace_id: str | None
+    score: float | None
+    overall_passed: bool | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentEvalRunListResponse(BaseModel):
+    items: list[AgentEvalRunSummary]
+
+
+class SourceProposalDecisionSummary(BaseModel):
+    source_proposal_decision_id: str
+    decision_type: str
+    agent_name: str | None
+    trace_id: str | None
+    product_id: str | None
+    vendor_id: str | None
+    source_id: str | None
+    crawl_job_id: str | None
+    proposal_root_url: str | None
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SourceProposalDecisionListResponse(BaseModel):
+    items: list[SourceProposalDecisionSummary]
