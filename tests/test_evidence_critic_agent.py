@@ -18,6 +18,19 @@ class DummySession:
         return None
 
 
+class DummyClaimsResponse:
+    def __init__(self, items):
+        self.items = items
+
+
+class DummyProductIntelligence:
+    def __init__(self, items):
+        self.items = items
+
+    def get_product_claims(self, product_id, min_confidence, include_stale, include_evidence):
+        return DummyClaimsResponse(self.items)
+
+
 def _claim(*, claim_id: str, flags: list[str], source_count: int, include_evidence: bool) -> NormalizedClaim:
     evidence = []
     if include_evidence:
@@ -36,8 +49,8 @@ def _claim(*, claim_id: str, flags: list[str], source_count: int, include_eviden
     return NormalizedClaim(
         claim_id=claim_id,
         claim_type="capability",
-        normalized_key="single_sign_on",
-        display_label="Single Sign-On",
+        normalized_key="single_sign_on" if claim_id == "c1" else "api_access",
+        display_label="Single Sign-On" if claim_id == "c1" else "API Access",
         confidence=0.82,
         support_count=1,
         source_count=source_count,
@@ -63,3 +76,20 @@ def test_critique_claim_marks_thin_or_stale_support() -> None:
     assert "one source" in thin_result.reason.lower()
     assert stale_result.support_quality == "weak"
     assert any("include_evidence" in recommendation for recommendation in stale_result.recommendations)
+
+
+def test_critique_returns_claim_verification_summary() -> None:
+    items = [
+        _claim(claim_id="c1", flags=[], source_count=1, include_evidence=True),
+        _claim(claim_id="c2", flags=["stale"], source_count=2, include_evidence=False),
+    ]
+    service = EvidenceCriticAgentService(DummySession())  # type: ignore[arg-type]
+    service.product_intelligence = DummyProductIntelligence(items)
+    service.agent_run_store = DummyStore()
+
+    response = service.critique(type("Req", (), {"product_id": "00000000-0000-0000-0000-000000000001", "min_confidence": 0.6, "limit": 5, "model_dump": lambda self: {"product_id": "00000000-0000-0000-0000-000000000001", "min_confidence": 0.6, "limit": 5}})())
+
+    assert response.claim_verification is not None
+    assert response.claim_verification.thin_claim_count == 1
+    assert response.claim_verification.stale_supported_claim_count == 1
+    assert len(service.agent_run_store.calls) == 1

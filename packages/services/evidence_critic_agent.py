@@ -12,6 +12,7 @@ from packages.contracts.agents import (
 )
 from packages.observability.tracing import log_event, traced_span
 from packages.services.agent_run_store import AgentRunStore
+from packages.services.claim_verifier import ClaimVerifierService
 from packages.services.product_intelligence import ProductIntelligenceService
 
 STRATEGY_VERSION = "evidence_critic_v1"
@@ -22,6 +23,7 @@ class EvidenceCriticAgentService:
         self.db = db
         self.product_intelligence = ProductIntelligenceService(db)
         self.agent_run_store = AgentRunStore(db)
+        self.claim_verifier = ClaimVerifierService()
 
     def critique(self, request: EvidenceCriticRequest) -> EvidenceCriticResponse:
         product_id = uuid.UUID(request.product_id)
@@ -33,10 +35,14 @@ class EvidenceCriticAgentService:
                 include_evidence=True,
             )
             critiques = [self._critique_claim(claim) for claim in claims_response.items[: request.limit]]
+            temp_payload = {"critiques": [critique.model_dump() for critique in critiques]}
+            claim_verification = self.claim_verifier.classify_evidence_critic_payload(temp_payload)
             log_event(
                 "agent.evidence_critic.completed",
                 product_id=request.product_id,
                 critique_count=len(critiques),
+                backed_claim_count=claim_verification.backed_claim_count,
+                unsupported_claim_count=claim_verification.unsupported_claim_count,
             )
             response = EvidenceCriticResponse(
                 product_id=request.product_id,
@@ -46,6 +52,7 @@ class EvidenceCriticAgentService:
                     mode="heuristic_scaffold",
                 ),
                 critiques=critiques,
+                claim_verification=claim_verification,
             )
             self.agent_run_store.create_agent_run(
                 agent_name="evidence_critic_agent",

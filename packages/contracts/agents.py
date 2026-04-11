@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from packages.contracts.agent_evals import ClaimVerificationSummary
+
 
 class SourcePlannerRequest(BaseModel):
     product_id: str
@@ -51,3 +53,4 @@ class EvidenceCriticResponse(BaseModel):
     product_id: str
     agent: AgentRunSummary
     critiques: list[EvidenceCritiqueItem] = Field(default_factory=list)
+    claim_verification: ClaimVerificationSummary | None = None
