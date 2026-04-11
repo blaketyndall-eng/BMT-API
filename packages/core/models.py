@@ -131,3 +131,51 @@ class CrawlJob(TimestampMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+
+
+class AgentRun(TimestampMixin, Base):
+    __tablename__ = "agent_runs"
+
+    agent_run_id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    agent_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    strategy_version: Mapped[str | None] = mapped_column(String(100))
+    mode: Mapped[str | None] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(50), default="completed", nullable=False)
+    trace_id: Mapped[str | None] = mapped_column(String(64))
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.product_id"))
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vendors.vendor_id"))
+    request_payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    response_payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class AgentEvalRun(TimestampMixin, Base):
+    __tablename__ = "agent_eval_runs"
+
+    agent_eval_run_id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    agent_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    evaluator_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="completed", nullable=False)
+    trace_id: Mapped[str | None] = mapped_column(String(64))
+    request_payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    response_payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    score: Mapped[float | None] = mapped_column(Float)
+    overall_passed: Mapped[bool | None] = mapped_column(Boolean)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class SourceProposalDecision(TimestampMixin, Base):
+    __tablename__ = "source_proposal_decisions"
+
+    source_proposal_decision_id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    decision_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    agent_name: Mapped[str | None] = mapped_column(String(100))
+    trace_id: Mapped[str | None] = mapped_column(String(64))
+    product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.product_id"))
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vendors.vendor_id"))
+    source_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sources.source_id"))
+    crawl_job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("crawl_jobs.crawl_job_id"))
+    proposal_payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    decision_payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)

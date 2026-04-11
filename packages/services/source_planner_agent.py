@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from packages.contracts.agents import AgentRunSummary, SourcePlannerRequest, SourcePlannerResponse, SourceProposal
 from packages.core.models import Product, Source, Vendor
 from packages.observability.tracing import log_event, traced_span
+from packages.services.agent_run_store import AgentRunStore
 from packages.services.gap_detector import detect_product_gaps
 from packages.services.product_intelligence import ProductIntelligenceService, build_normalized_claims
 
@@ -19,6 +20,7 @@ class SourcePlannerAgentService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.product_intelligence = ProductIntelligenceService(db)
+        self.agent_run_store = AgentRunStore(db)
 
     def plan(self, request: SourcePlannerRequest) -> SourcePlannerResponse:
         product_id = uuid.UUID(request.product_id)
@@ -42,7 +44,7 @@ class SourcePlannerAgentService:
                 gap_count=len(gaps),
                 proposal_count=len(proposals),
             )
-            return SourcePlannerResponse(
+            response = SourcePlannerResponse(
                 product_id=request.product_id,
                 agent=AgentRunSummary(
                     agent_name="source_planner_agent",
@@ -52,6 +54,17 @@ class SourcePlannerAgentService:
                 considered_gap_codes=[gap.gap_code for gap in gaps],
                 proposals=proposals,
             )
+            self.agent_run_store.create_agent_run(
+                agent_name="source_planner_agent",
+                strategy_version=STRATEGY_VERSION,
+                mode="heuristic_scaffold",
+                product_id=request.product_id,
+                vendor_id=context.get("vendor_id"),
+                request_payload=request.model_dump(),
+                response_payload=response.model_dump(),
+            )
+            self.db.commit()
+            return response
 
     def _get_product_vendor_context(self, product_id: uuid.UUID) -> dict[str, str | None]:
         row = self.db.execute(
@@ -65,6 +78,7 @@ class SourcePlannerAgentService:
         return {
             "product_name": product.canonical_name,
             "primary_domain": vendor.primary_domain,
+            "vendor_id": str(vendor.vendor_id),
         }
 
     def _get_existing_sources(self, product_id: uuid.UUID) -> set[str]:
