@@ -1,9 +1,13 @@
 from fastapi.testclient import TestClient
 
 from apps.api.main import app
+from packages.core.deps import get_db
 
 
 class DummyRegistryManagerService:
+    def __init__(self, _db: object) -> None:
+        pass
+
     def run_discovery(self, payload):
         return type(
             "Resp",
@@ -49,8 +53,13 @@ class DummyRegistryManagerService:
         )()
 
 
+def override_get_db():
+    yield object()
+
+
 def test_admin_discovery_run_returns_candidates_and_groups(monkeypatch) -> None:
     monkeypatch.setattr("apps.api.routes.admin_discovery.RegistryManagerService", DummyRegistryManagerService)
+    app.dependency_overrides[get_db] = override_get_db
     client = TestClient(app)
 
     response = client.post(
@@ -64,3 +73,5 @@ def test_admin_discovery_run_returns_candidates_and_groups(monkeypatch) -> None:
     assert body["discovery_groups_run"] == ["surface_mapper", "machine_readable_finder", "ecosystem_finder"]
     assert body["candidates"][1]["source_group"] == "ecosystem_commercial"
     assert body["candidates"][1]["root_url"] == "https://github.com/example"
+
+    app.dependency_overrides.clear()
