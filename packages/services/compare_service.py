@@ -12,6 +12,7 @@ from packages.contracts.compare import (
     CompareSideSummary,
     ComparedClaim,
 )
+from packages.observability.tracing import log_event, traced_span
 from packages.services.product_intelligence import ProductIntelligenceService
 
 
@@ -95,64 +96,75 @@ class CompareService:
         left_product_id = uuid.UUID(request.left_product_id)
         right_product_id = uuid.UUID(request.right_product_id)
 
-        left_claims_response = self.product_intelligence.get_product_claims(
-            left_product_id,
-            min_confidence=request.filters.min_confidence,
-            include_stale=request.filters.include_stale,
-            include_evidence=request.filters.include_evidence,
-        )
-        right_claims_response = self.product_intelligence.get_product_claims(
-            right_product_id,
-            min_confidence=request.filters.min_confidence,
-            include_stale=request.filters.include_stale,
-            include_evidence=request.filters.include_evidence,
-        )
+        with traced_span(
+            "compare.products",
+            left_product_id=str(left_product_id),
+            right_product_id=str(right_product_id),
+        ):
+            left_claims_response = self.product_intelligence.get_product_claims(
+                left_product_id,
+                min_confidence=request.filters.min_confidence,
+                include_stale=request.filters.include_stale,
+                include_evidence=request.filters.include_evidence,
+            )
+            right_claims_response = self.product_intelligence.get_product_claims(
+                right_product_id,
+                min_confidence=request.filters.min_confidence,
+                include_stale=request.filters.include_stale,
+                include_evidence=request.filters.include_evidence,
+            )
 
-        allowed_claim_types = set(request.filters.claim_types)
-        left_claims = [claim for claim in left_claims_response.items if claim.claim_type in allowed_claim_types]
-        right_claims = [claim for claim in right_claims_response.items if claim.claim_type in allowed_claim_types]
+            allowed_claim_types = set(request.filters.claim_types)
+            left_claims = [claim for claim in left_claims_response.items if claim.claim_type in allowed_claim_types]
+            right_claims = [claim for claim in right_claims_response.items if claim.claim_type in allowed_claim_types]
 
-        left_summary = self.product_intelligence.get_product_summary(
-            left_product_id,
-            min_confidence=request.filters.min_confidence,
-            include_evidence=False,
-        )
-        right_summary = self.product_intelligence.get_product_summary(
-            right_product_id,
-            min_confidence=request.filters.min_confidence,
-            include_evidence=False,
-        )
+            left_summary = self.product_intelligence.get_product_summary(
+                left_product_id,
+                min_confidence=request.filters.min_confidence,
+                include_evidence=False,
+            )
+            right_summary = self.product_intelligence.get_product_summary(
+                right_product_id,
+                min_confidence=request.filters.min_confidence,
+                include_evidence=False,
+            )
 
-        shared, left_only, right_only = _compare_claim_sets(
-            left_claims=left_claims,
-            right_claims=right_claims,
-        )
+            shared, left_only, right_only = _compare_claim_sets(
+                left_claims=left_claims,
+                right_claims=right_claims,
+            )
+            log_event(
+                "compare.products.completed",
+                shared_count=len(shared),
+                left_only_count=len(left_only),
+                right_only_count=len(right_only),
+            )
 
-        return CompareResponse(
-            generated_at=datetime.now(timezone.utc),
-            left=CompareSideSummary(
-                product_id=left_claims_response.product_id,
-                product_name=left_claims_response.product_name,
-                vendor_name=left_claims_response.vendor_name,
-                claim_count=len(left_claims),
-                high_confidence_claim_count=len([claim for claim in left_claims if claim.confidence >= 0.75]),
-                stale_claim_count=len([claim for claim in left_claims if "stale" in claim.flags]),
-                gap_count=len(left_summary.gaps),
-                last_crawled_at=left_summary.stats.last_crawled_at,
-            ),
-            right=CompareSideSummary(
-                product_id=right_claims_response.product_id,
-                product_name=right_claims_response.product_name,
-                vendor_name=right_claims_response.vendor_name,
-                claim_count=len(right_claims),
-                high_confidence_claim_count=len([claim for claim in right_claims if claim.confidence >= 0.75]),
-                stale_claim_count=len([claim for claim in right_claims if "stale" in claim.flags]),
-                gap_count=len(right_summary.gaps),
-                last_crawled_at=right_summary.stats.last_crawled_at,
-            ),
-            shared=shared,
-            left_only=left_only,
-            right_only=right_only,
-            left_gaps=left_summary.gaps,
-            right_gaps=right_summary.gaps,
-        )
+            return CompareResponse(
+                generated_at=datetime.now(timezone.utc),
+                left=CompareSideSummary(
+                    product_id=left_claims_response.product_id,
+                    product_name=left_claims_response.product_name,
+                    vendor_name=left_claims_response.vendor_name,
+                    claim_count=len(left_claims),
+                    high_confidence_claim_count=len([claim for claim in left_claims if claim.confidence >= 0.75]),
+                    stale_claim_count=len([claim for claim in left_claims if "stale" in claim.flags]),
+                    gap_count=len(left_summary.gaps),
+                    last_crawled_at=left_summary.stats.last_crawled_at,
+                ),
+                right=CompareSideSummary(
+                    product_id=right_claims_response.product_id,
+                    product_name=right_claims_response.product_name,
+                    vendor_name=right_claims_response.vendor_name,
+                    claim_count=len(right_claims),
+                    high_confidence_claim_count=len([claim for claim in right_claims if claim.confidence >= 0.75]),
+                    stale_claim_count=len([claim for claim in right_claims if "stale" in claim.flags]),
+                    gap_count=len(right_summary.gaps),
+                    last_crawled_at=right_summary.stats.last_crawled_at,
+                ),
+                shared=shared,
+                left_only=left_only,
+                right_only=right_only,
+                left_gaps=left_summary.gaps,
+                right_gaps=right_summary.gaps,
+            )
