@@ -7,13 +7,14 @@ from apps.api.main import app
 from packages.contracts.admin import (
     CrawlJobListResponse,
     CrawlJobSummary,
-    VendorSourcesResponse,
     SourceSummary,
+    VendorSourcesResponse,
 )
+from packages.contracts.admin_actions import CrawlJobReplayResponse, SourceRecrawlResponse
 from packages.core.deps import get_db
 
 
-class DummyService:
+class DummyQueryService:
     def __init__(self, _db: object) -> None:
         pass
 
@@ -63,12 +64,33 @@ class DummyService:
         )
 
 
+class DummyActionService:
+    def __init__(self, _db: object) -> None:
+        pass
+
+    def recrawl_source(self, source_id, request):
+        return SourceRecrawlResponse(
+            source_id=str(source_id),
+            crawl_job_id=str(uuid.uuid4()),
+            status="queued",
+            deduped=False,
+        )
+
+    def replay_crawl_job(self, crawl_job_id, request):
+        return CrawlJobReplayResponse(
+            original_crawl_job_id=str(crawl_job_id),
+            replay_crawl_job_id=str(uuid.uuid4()),
+            status="queued",
+            deduped=False,
+        )
+
+
 def override_get_db():
     yield object()
 
 
 def test_admin_crawl_jobs_endpoint_returns_payload(monkeypatch) -> None:
-    monkeypatch.setattr("apps.api.routes.admin.AdminQueryService", DummyService)
+    monkeypatch.setattr("apps.api.routes.admin.AdminQueryService", DummyQueryService)
     app.dependency_overrides[get_db] = override_get_db
     client = TestClient(app)
 
@@ -82,8 +104,46 @@ def test_admin_crawl_jobs_endpoint_returns_payload(monkeypatch) -> None:
     app.dependency_overrides.clear()
 
 
+def test_admin_recrawl_source_endpoint_returns_payload(monkeypatch) -> None:
+    monkeypatch.setattr("apps.api.routes.admin.AdminActionService", DummyActionService)
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    source_id = uuid.uuid4()
+
+    response = client.post(
+        f"/v1/admin/sources/{source_id}/recrawl",
+        json={"reason": "manual", "priority": 95, "force": False},
+    )
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["source_id"] == str(source_id)
+    assert body["status"] == "queued"
+
+    app.dependency_overrides.clear()
+
+
+def test_admin_replay_crawl_job_endpoint_returns_payload(monkeypatch) -> None:
+    monkeypatch.setattr("apps.api.routes.admin.AdminActionService", DummyActionService)
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    crawl_job_id = uuid.uuid4()
+
+    response = client.post(
+        f"/v1/admin/crawl-jobs/{crawl_job_id}/replay",
+        json={"priority": 91, "reason": "manual_replay"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["original_crawl_job_id"] == str(crawl_job_id)
+    assert body["status"] == "queued"
+
+    app.dependency_overrides.clear()
+
+
 def test_vendor_sources_endpoint_returns_payload(monkeypatch) -> None:
-    monkeypatch.setattr("apps.api.routes.vendors.AdminQueryService", DummyService)
+    monkeypatch.setattr("apps.api.routes.vendors.AdminQueryService", DummyQueryService)
     app.dependency_overrides[get_db] = override_get_db
     client = TestClient(app)
     vendor_id = uuid.uuid4()
