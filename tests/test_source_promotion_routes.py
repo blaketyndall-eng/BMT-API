@@ -53,7 +53,7 @@ def test_promote_source_proposal_endpoint_returns_payload(monkeypatch) -> None:
                 "target_gap_codes": ["missing_docs_surface"],
                 "confidence": 0.9,
             },
-            "create_crawl_job": true,
+            "create_crawl_job": True,
             "crawl_priority": 90,
         },
     )
