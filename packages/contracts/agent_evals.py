@@ -20,8 +20,24 @@ class AgentEvalScorecard(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
 
 
+class ClaimVerificationItem(BaseModel):
+    claim_id: str
+    normalized_key: str
+    bucket: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class ClaimVerificationSummary(BaseModel):
+    backed_claim_count: int
+    thin_claim_count: int
+    unsupported_claim_count: int
+    stale_supported_claim_count: int
+    items: list[ClaimVerificationItem] = Field(default_factory=list)
+
+
 class AgentEvalResponse(BaseModel):
     agent_name: str
     evaluator_version: str
     scorecard: AgentEvalScorecard
     checks: list[AgentEvalCheck] = Field(default_factory=list)
+    claim_verification: ClaimVerificationSummary | None = None

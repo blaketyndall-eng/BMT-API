@@ -5,9 +5,11 @@ from packages.contracts.agent_evals import (
     AgentEvalRequest,
     AgentEvalResponse,
     AgentEvalScorecard,
+    ClaimVerificationSummary,
 )
 from packages.observability.tracing import log_event, traced_span
 from packages.services.agent_run_store import AgentRunStore
+from packages.services.claim_verifier import ClaimVerifierService
 
 EVALUATOR_VERSION = "agent_evaluator_v1"
 _ALLOWED_SUPPORT_QUALITIES = {"strong", "thin", "weak"}
@@ -17,13 +19,16 @@ class AgentEvaluatorService:
     def __init__(self, db=None) -> None:
         self.db = db
         self.agent_run_store = AgentRunStore(db) if db is not None else None
+        self.claim_verifier = ClaimVerifierService()
 
     def evaluate(self, request: AgentEvalRequest) -> AgentEvalResponse:
         with traced_span("agent_evaluator.evaluate", agent_name=request.agent_name):
+            claim_verification: ClaimVerificationSummary | None = None
             if request.agent_name == "source_planner_agent":
                 checks = self._evaluate_source_planner_payload(request.payload)
             elif request.agent_name == "evidence_critic_agent":
                 checks = self._evaluate_evidence_critic_payload(request.payload)
+                claim_verification = self.claim_verifier.classify_evidence_critic_payload(request.payload)
             else:
                 checks = [
                     AgentEvalCheck(
@@ -44,6 +49,8 @@ class AgentEvaluatorService:
                 passed_checks=passed_checks,
                 failed_checks=failed_checks,
                 score=score,
+                backed_claim_count=claim_verification.backed_claim_count if claim_verification else None,
+                unsupported_claim_count=claim_verification.unsupported_claim_count if claim_verification else None,
             )
             response = AgentEvalResponse(
                 agent_name=request.agent_name,
@@ -55,6 +62,7 @@ class AgentEvaluatorService:
                     score=score,
                 ),
                 checks=checks,
+                claim_verification=claim_verification,
             )
             if self.agent_run_store is not None:
                 self.agent_run_store.create_agent_eval_run(
