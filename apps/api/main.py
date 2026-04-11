@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from apps.api.routes.admin import router as admin_router
+from apps.api.routes.agents import router as agents_router
 from apps.api.routes.compare import router as compare_router
 from apps.api.routes.products import router as products_router
 from apps.api.routes.vendors import router as vendors_router
@@ -18,6 +19,7 @@ app.include_router(vendors_router)
 app.include_router(admin_router)
 app.include_router(products_router)
 app.include_router(compare_router)
+app.include_router(agents_router)
 
 
 @app.get("/healthz", tags=["system"])
