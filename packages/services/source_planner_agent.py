@@ -7,13 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from packages.contracts.agents import AgentRunSummary, SourcePlannerRequest, SourcePlannerResponse, SourceProposal
-from packages.core.models import Product, Source, Vendor
+from packages.core.models import Product, Source, SourceProposalDecision, Vendor
 from packages.observability.tracing import log_event, traced_span
 from packages.services.agent_run_store import AgentRunStore
 from packages.services.gap_detector import detect_product_gaps
 from packages.services.product_intelligence import ProductIntelligenceService, build_normalized_claims
+from packages.services.source_planner_ranker import ProposalHistory, SourcePlannerRanker
 
-STRATEGY_VERSION = "source_planner_v1"
+STRATEGY_VERSION = "source_planner_v2"
 
 
 class SourcePlannerAgentService:
@@ -21,6 +22,7 @@ class SourcePlannerAgentService:
         self.db = db
         self.product_intelligence = ProductIntelligenceService(db)
         self.agent_run_store = AgentRunStore(db)
+        self.ranker = SourcePlannerRanker()
 
     def plan(self, request: SourcePlannerRequest) -> SourcePlannerResponse:
         product_id = uuid.UUID(request.product_id)
@@ -31,10 +33,12 @@ class SourcePlannerAgentService:
             page_types = self.product_intelligence._get_page_types(product_id)
             gaps = detect_product_gaps(page_types=page_types, claims=claims)
             existing_sources = self._get_existing_sources(product_id)
+            history_by_url = self._get_proposal_history(product_id)
             proposals = self._build_proposals(
                 primary_domain=context["primary_domain"],
                 gaps=gaps,
                 existing_sources=existing_sources,
+                history_by_url=history_by_url,
                 include_existing_sources=request.include_existing_sources,
                 max_candidates=request.max_candidates,
             )
@@ -49,7 +53,7 @@ class SourcePlannerAgentService:
                 agent=AgentRunSummary(
                     agent_name="source_planner_agent",
                     strategy_version=STRATEGY_VERSION,
-                    mode="heuristic_scaffold",
+                    mode="ranked_planner_v2",
                 ),
                 considered_gap_codes=[gap.gap_code for gap in gaps],
                 proposals=proposals,
@@ -57,7 +61,7 @@ class SourcePlannerAgentService:
             self.agent_run_store.create_agent_run(
                 agent_name="source_planner_agent",
                 strategy_version=STRATEGY_VERSION,
-                mode="heuristic_scaffold",
+                mode="ranked_planner_v2",
                 product_id=request.product_id,
                 vendor_id=context.get("vendor_id"),
                 request_payload=request.model_dump(),
@@ -85,12 +89,31 @@ class SourcePlannerAgentService:
         rows = self.db.execute(select(Source.root_url).where(Source.product_id == product_id)).scalars()
         return set(rows)
 
+    def _get_proposal_history(self, product_id: uuid.UUID) -> dict[str, ProposalHistory]:
+        rows = self.db.execute(
+            select(SourceProposalDecision)
+            .where(SourceProposalDecision.product_id == product_id)
+            .order_by(SourceProposalDecision.created_at.desc())
+        ).scalars()
+        history_by_url: dict[str, ProposalHistory] = {}
+        for decision in rows:
+            root_url = decision.proposal_payload.get("root_url")
+            if not root_url:
+                continue
+            history = history_by_url.setdefault(root_url, ProposalHistory())
+            if decision.decision_type == "promote":
+                history.promoted_count += 1
+            elif decision.decision_type == "reject":
+                history.rejected_count += 1
+        return history_by_url
+
     def _build_proposals(
         self,
         *,
         primary_domain: str | None,
         gaps,
         existing_sources: set[str],
+        history_by_url: dict[str, ProposalHistory],
         include_existing_sources: bool,
         max_candidates: int,
     ) -> list[SourceProposal]:
@@ -178,4 +201,5 @@ class SourcePlannerAgentService:
                     0.62,
                 )
 
-        return list(candidates.values())[:max_candidates]
+        ranked = self.ranker.rank(list(candidates.values()), history_by_url)
+        return ranked[:max_candidates]
