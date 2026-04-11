@@ -5,6 +5,7 @@ class DiscoveryRequest(BaseModel):
     vendor_domain: str
     product_id: str | None = None
     include_machine_readable: bool = True
+    include_ecosystem: bool = True
 
 
 class DiscoveredSourceCandidate(BaseModel):
@@ -26,3 +27,4 @@ class DiscoveredSourceCandidate(BaseModel):
 class DiscoveryResponse(BaseModel):
     vendor_domain: str
     candidates: list[DiscoveredSourceCandidate] = Field(default_factory=list)
+    discovery_groups_run: list[str] = Field(default_factory=list)
