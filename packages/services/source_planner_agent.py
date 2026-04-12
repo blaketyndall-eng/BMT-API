@@ -10,11 +10,13 @@ from packages.contracts.agents import AgentRunSummary, SourcePlannerRequest, Sou
 from packages.core.models import CrawlJob, Product, Source, SourceProposalDecision, Vendor
 from packages.observability.tracing import log_event, traced_span
 from packages.services.agent_run_store import AgentRunStore
+from packages.services.evidence_yield import EvidenceYieldService
+from packages.services.gap_closure import GapClosureService
 from packages.services.gap_detector import detect_product_gaps
 from packages.services.product_intelligence import ProductIntelligenceService, build_normalized_claims
 from packages.services.source_planner_ranker import ProposalHistory, SourcePlannerRanker
 
-STRATEGY_VERSION = "source_planner_v2"
+STRATEGY_VERSION = "source_planner_v3"
 _FAILED_CRAWL_STATUSES = {"failed", "retryable"}
 
 
@@ -23,6 +25,8 @@ class SourcePlannerAgentService:
         self.db = db
         self.product_intelligence = ProductIntelligenceService(db)
         self.agent_run_store = AgentRunStore(db)
+        self.evidence_yield = EvidenceYieldService(db)
+        self.gap_closure = GapClosureService(db)
         self.ranker = SourcePlannerRanker()
 
     def plan(self, request: SourcePlannerRequest) -> SourcePlannerResponse:
@@ -54,7 +58,7 @@ class SourcePlannerAgentService:
                 agent=AgentRunSummary(
                     agent_name="source_planner_agent",
                     strategy_version=STRATEGY_VERSION,
-                    mode="ranked_planner_v2",
+                    mode="ranked_planner_v3",
                 ),
                 considered_gap_codes=[gap.gap_code for gap in gaps],
                 proposals=proposals,
@@ -62,7 +66,7 @@ class SourcePlannerAgentService:
             self.agent_run_store.create_agent_run(
                 agent_name="source_planner_agent",
                 strategy_version=STRATEGY_VERSION,
-                mode="ranked_planner_v2",
+                mode="ranked_planner_v3",
                 product_id=request.product_id,
                 vendor_id=context.get("vendor_id"),
                 request_payload=request.model_dump(),
@@ -86,11 +90,11 @@ class SourcePlannerAgentService:
             "vendor_id": str(vendor.vendor_id),
         }
 
-    def _get_existing_sources(self, product_id: uuid.UUID) -> dict[str, str]:
-        rows = self.db.execute(select(Source.root_url, Source.source_type).where(Source.product_id == product_id)).all()
-        return {root_url: source_type for root_url, source_type in rows}
+    def _get_existing_sources(self, product_id: uuid.UUID) -> dict[str, tuple[str, str]]:
+        rows = self.db.execute(select(Source.root_url, Source.source_id, Source.source_type).where(Source.product_id == product_id)).all()
+        return {root_url: (str(source_id), source_type) for root_url, source_id, source_type in rows}
 
-    def _get_proposal_history(self, product_id: uuid.UUID, existing_sources: dict[str, str]) -> dict[str, ProposalHistory]:
+    def _get_proposal_history(self, product_id: uuid.UUID, existing_sources: dict[str, tuple[str, str]]) -> dict[str, ProposalHistory]:
         history_by_url: dict[str, ProposalHistory] = {}
 
         decision_rows = self.db.execute(
@@ -109,7 +113,7 @@ class SourcePlannerAgentService:
                 history.rejected_count += 1
 
         source_type_counts: dict[str, int] = {}
-        for source_type in existing_sources.values():
+        for _, source_type in existing_sources.values():
             source_type_counts[source_type] = source_type_counts.get(source_type, 0) + 1
 
         crawl_rows = self.db.execute(
@@ -125,10 +129,13 @@ class SourcePlannerAgentService:
                 history_by_url.setdefault(root_url, ProposalHistory()).recent_failed_crawls += 1
 
         for root_url, history in history_by_url.items():
-            inferred_type = existing_sources.get(root_url)
-            if inferred_type:
+            source_info = existing_sources.get(root_url)
+            if source_info:
+                source_id, inferred_type = source_info
                 history.same_type_existing_count = source_type_counts.get(inferred_type, 0)
                 history.recent_failed_crawls += crawl_failures_by_type.get(inferred_type, 0)
+                history.evidence_yield_score = self.evidence_yield.compute(source_id)
+                history.gap_closure_score = self.gap_closure.compute(product_id, source_id)
 
         return history_by_url
 
@@ -137,7 +144,7 @@ class SourcePlannerAgentService:
         *,
         primary_domain: str | None,
         gaps,
-        existing_sources: dict[str, str],
+        existing_sources: dict[str, tuple[str, str]],
         history_by_url: dict[str, ProposalHistory],
         include_existing_sources: bool,
         max_candidates: int,
@@ -156,7 +163,7 @@ class SourcePlannerAgentService:
                     proposal.target_gap_codes.append(gap_code)
                 return
             history = history_by_url.setdefault(url, ProposalHistory())
-            history.same_type_existing_count = max(history.same_type_existing_count, sum(1 for existing_type in existing_sources.values() if existing_type == source_type))
+            history.same_type_existing_count = max(history.same_type_existing_count, sum(1 for _, existing_type in existing_sources.values() if existing_type == source_type))
             candidates[url] = SourceProposal(
                 root_url=url,
                 source_type=source_type,

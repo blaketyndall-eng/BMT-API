@@ -22,6 +22,8 @@ class ProposalHistory:
     rejected_count: int = 0
     same_type_existing_count: int = 0
     recent_failed_crawls: int = 0
+    evidence_yield_score: float = 0.0
+    gap_closure_score: float = 0.0
 
 
 class SourcePlannerRanker:
@@ -32,6 +34,8 @@ class SourcePlannerRanker:
         score -= min(history.rejected_count * 0.12, 0.36)
         score -= min(history.same_type_existing_count * 0.05, 0.2)
         score -= min(history.recent_failed_crawls * 0.1, 0.3)
+        score += min(history.evidence_yield_score * 0.2, 0.2)
+        score += min(history.gap_closure_score * 0.2, 0.2)
         return round(score, 4)
 
     def rank(
@@ -66,6 +70,10 @@ class SourcePlannerRanker:
             parts.append("this source type already has existing coverage")
         if history.recent_failed_crawls > 0:
             parts.append("similar recent crawl attempts failed")
+        if history.evidence_yield_score > 0.0:
+            parts.append("similar promoted sources produced useful evidence")
+        if history.gap_closure_score > 0.0:
+            parts.append("similar promoted sources helped close product gaps")
 
         if not parts:
             return " Ranked using source-type prior and current evidence-gap fit."
