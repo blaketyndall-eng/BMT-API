@@ -150,6 +150,34 @@ class AgentRun(TimestampMixin, Base):
     error_message: Mapped[str | None] = mapped_column(Text)
 
 
+class DiscoveryCandidate(TimestampMixin, Base):
+    __tablename__ = "discovery_candidates"
+
+    discovery_candidate_id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    discovery_run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agent_runs.agent_run_id"), nullable=False)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.product_id"))
+    promoted_source_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sources.source_id"))
+    vendor_domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    root_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    source_family: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_group: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_zone: Mapped[str] = mapped_column(String(50), nullable=False)
+    connector_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    machine_readable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    crawler_mode: Mapped[str] = mapped_column(String(100), nullable=False)
+    parser_chain: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    base_confidence_weight: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
+    provenance_required: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    terms_review_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    review_status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
+    reviewer_note: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    candidate_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+
+
 class AgentEvalRun(TimestampMixin, Base):
     __tablename__ = "agent_eval_runs"
 

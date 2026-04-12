@@ -9,6 +9,7 @@ from packages.services.agent_run_store import AgentRunStore
 from packages.services.discovery.ecosystem_finder import EcosystemFinderService
 from packages.services.discovery.machine_readable_finder import MachineReadableFinderService
 from packages.services.discovery.surface_mapper import SurfaceMapperService
+from packages.services.discovery_review import DiscoveryReviewService
 
 DISCOVERY_AGENT_NAME = "registry_manager_discovery"
 DISCOVERY_STRATEGY_VERSION = "discovery_v1"
@@ -18,6 +19,7 @@ class RegistryManagerService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.agent_run_store = AgentRunStore(db)
+        self.discovery_review = DiscoveryReviewService(db)
         self.surface_mapper = SurfaceMapperService()
         self.machine_readable_finder = MachineReadableFinderService()
         self.ecosystem_finder = EcosystemFinderService()
@@ -46,7 +48,7 @@ class RegistryManagerService:
             candidates=list(deduped.values()),
             discovery_groups_run=groups_run,
         )
-        self.agent_run_store.create_agent_run(
+        run = self.agent_run_store.create_agent_run(
             agent_name=DISCOVERY_AGENT_NAME,
             strategy_version=DISCOVERY_STRATEGY_VERSION,
             mode="manager_orchestrated_discovery",
@@ -54,6 +56,12 @@ class RegistryManagerService:
             vendor_id=None,
             request_payload=request.model_dump(),
             response_payload=response.model_dump(),
+        )
+        self.discovery_review.create_candidates(
+            discovery_run_id=str(run.agent_run_id),
+            product_id=request.product_id,
+            vendor_domain=request.vendor_domain,
+            candidates=response.candidates,
         )
         self.db.commit()
         return response
