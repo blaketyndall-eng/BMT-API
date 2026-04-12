@@ -57,3 +57,21 @@ def test_rank_penalizes_existing_coverage_and_failed_crawls() -> None:
     assert ranked[0].root_url == cleaner.root_url
     assert "existing coverage" in ranked[1].reason.lower()
     assert "crawl attempts failed" in ranked[1].reason.lower()
+
+
+def test_rank_rewards_evidence_yield_and_gap_closure() -> None:
+    ranker = SourcePlannerRanker()
+    stronger = _proposal("https://docs.example.com", "docs_subdomain", 0.78)
+    weaker = _proposal("https://example.com/docs", "docs_path", 0.82)
+
+    ranked = ranker.rank(
+        [weaker, stronger],
+        {
+            stronger.root_url: ProposalHistory(promoted_count=1, evidence_yield_score=0.9, gap_closure_score=0.8),
+            weaker.root_url: ProposalHistory(promoted_count=1, evidence_yield_score=0.0, gap_closure_score=0.0),
+        },
+    )
+
+    assert ranked[0].root_url == stronger.root_url
+    assert "useful evidence" in ranked[0].reason.lower()
+    assert "close product gaps" in ranked[0].reason.lower()
