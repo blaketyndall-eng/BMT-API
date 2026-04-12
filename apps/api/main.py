@@ -4,6 +4,7 @@ from apps.api.routes.admin import router as admin_router
 from apps.api.routes.admin_agent_ops import router as admin_agent_ops_router
 from apps.api.routes.admin_discovery import router as admin_discovery_router
 from apps.api.routes.admin_discovery_review import router as admin_discovery_review_router
+from apps.api.routes.admin_entity_resolution import router as admin_entity_resolution_router
 from apps.api.routes.admin_source_registry import router as admin_source_registry_router
 from apps.api.routes.agent_evals import router as agent_evals_router
 from apps.api.routes.agents import router as agents_router
@@ -27,6 +28,7 @@ app.include_router(admin_agent_ops_router)
 app.include_router(admin_source_registry_router)
 app.include_router(admin_discovery_router)
 app.include_router(admin_discovery_review_router)
+app.include_router(admin_entity_resolution_router)
 app.include_router(agent_evals_router)
 app.include_router(source_promotion_router)
 app.include_router(products_router)
