@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -29,20 +31,20 @@ class EntityResolutionService:
 
     def _resolve_vendors(self, request: EntityResolutionRequest) -> list[VendorResolutionMatch]:
         domain = self._normalize_domain(request.vendor_domain or request.root_url)
-        slug = self._normalize_slug(request.artifact_slug or domain)
-        if not domain and not slug:
+        vendor_slug = self._derive_vendor_slug(domain)
+        if not domain and not vendor_slug:
             return []
 
         clauses = []
         if domain:
             clauses.append(Vendor.primary_domain == domain)
-        if slug:
-            clauses.append(Vendor.canonical_slug == slug)
+        if vendor_slug:
+            clauses.append(Vendor.canonical_slug == vendor_slug)
         rows = self.db.execute(select(Vendor).where(or_(*clauses))).scalars() if clauses else []
 
         matches: list[VendorResolutionMatch] = []
         for vendor in rows:
-            reason, confidence = self._vendor_reason_and_confidence(vendor, domain, slug)
+            reason, confidence = self._vendor_reason_and_confidence(vendor, domain, vendor_slug)
             matches.append(
                 VendorResolutionMatch(
                     vendor_id=str(vendor.vendor_id),
@@ -60,16 +62,14 @@ class EntityResolutionService:
         request: EntityResolutionRequest,
         vendor_matches: list[VendorResolutionMatch],
     ) -> list[ProductResolutionMatch]:
-        slug = self._normalize_slug(request.artifact_slug or request.root_url or request.vendor_domain)
+        slug = self._normalize_slug(request.artifact_slug)
         if not slug:
             return []
 
-        vendor_ids = [match.vendor_id for match in vendor_matches]
-        stmt = select(Product)
+        stmt = select(Product).where(Product.canonical_slug == slug)
+        vendor_ids = [UUID(match.vendor_id) for match in vendor_matches]
         if vendor_ids:
-            from uuid import UUID
-            stmt = stmt.where(Product.vendor_id.in_([UUID(vendor_id) for vendor_id in vendor_ids]))
-        stmt = stmt.where(Product.canonical_slug == slug)
+            stmt = stmt.where(Product.vendor_id.in_(vendor_ids))
         rows = self.db.execute(stmt).scalars()
 
         matches: list[ProductResolutionMatch] = []
@@ -94,13 +94,19 @@ class EntityResolutionService:
         if domain_match:
             return "Primary domain matched vendor domain.", 0.91
         if slug_match:
-            return "Canonical slug matched artifact slug.", 0.78
+            return "Canonical slug matched vendor slug derived from the domain.", 0.78
         return "Weak deterministic match.", 0.55
+
+    def _derive_vendor_slug(self, domain: str | None) -> str | None:
+        if not domain:
+            return None
+        return self._normalize_slug(domain)
 
     def _normalize_domain(self, value: str | None) -> str | None:
         if not value:
             return None
         cleaned = value.removeprefix("https://").removeprefix("http://").split("/")[0].strip().lower()
+        cleaned = cleaned.split(":")[0]
         if cleaned.startswith("www."):
             cleaned = cleaned[4:]
         return cleaned or None
