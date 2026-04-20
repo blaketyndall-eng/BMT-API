@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 
 from apps.api.routes.admin import router as admin_router
@@ -13,6 +15,9 @@ from apps.api.routes.source_promotion import router as source_promotion_router
 from apps.api.routes.vendors import router as vendors_router
 from packages.core.config import get_settings
 from packages.observability.middleware import RequestTracingMiddleware
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="BMT API",
@@ -37,6 +42,11 @@ app.include_router(agents_router)
 @app.get("/healthz", tags=["system"])
 def healthcheck() -> dict[str, str]:
     settings = get_settings()
+    logger.debug(
+        "/healthz — settings.environment=%r settings.database_url=%r",
+        settings.environment,
+        settings.database_url,
+    )
     return {
         "status": "ok",
         "service": "api",
